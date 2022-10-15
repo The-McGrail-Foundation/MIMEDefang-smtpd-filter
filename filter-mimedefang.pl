@@ -40,9 +40,13 @@ To enable the filter just add the following lines into your smtpd.conf:
     filter "mimedefang" proc-exec "filter-mimedefang.pl" user _mdefang group _mdefang
     listen on all filter "mimedefang"
 
+The program has a "-d" parameter to enable debug mode, when debug mode is enabled, logs will
+be more verbose and temporary files under /var/spool/MIMEDefang will not be removed.
+
 =cut
 
 use File::Path;
+use Getopt::Std;
 use IO::Socket::UNIX;
 use Mail::MIMEDefang;
 use OpenSMTPd::Filter;
@@ -53,7 +57,13 @@ unshift @INC, sub { warn "Attempted to load $_[1]"; return };
 my $MDSPOOL_PATH = "/var/spool/MIMEDefang/";
 my $SOCK_PATH = "/var/spool/MIMEDefang/mimedefang-multiplexor.sock";
 
-my $debug = 1;
+my %opts;
+getopts("d", \%opts);
+
+my $debug = 0;
+if(defined $opts{d}) {
+  $debug = 1;
+}
 
 my $filter = OpenSMTPd::Filter->new(
     debug => $debug,

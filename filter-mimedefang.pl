@@ -82,6 +82,28 @@ sub helo_check {
     return 'proceed';
 }
 
+sub _read_headers {
+  my ( $message, $lines ) = @_;
+  my @lines = @{$lines};
+
+  my $subject;
+  my @headers = ();
+
+  mkdir($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) or return;
+  open(my $fh, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS") or return;
+  foreach my $ln ( @lines ) {
+    last if($ln =~ /^$/);
+    if($ln =~ /^Subject\:(.*)/) {
+      $subject = percent_encode($1);
+    }
+    chomp($ln);
+    push(@headers, $ln);
+    print $fh "$ln\n";
+  }
+  close($fh);
+  return ($subject, @headers);
+}
+
 sub data_save {
     my ( $phase, $s, $lines ) = @_;
     my @lines = @{$lines};
@@ -94,18 +116,12 @@ sub data_save {
     my ($fh, $fi, $fc);
     my $subject;
 
-    mkdir($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'});
-    open($fh, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS");
-    foreach my $ln ( @lines ) {
-      last if($ln =~ /^$/);
-      if($ln =~ /^Subject\:(.*)/) {
-        $subject = percent_encode($1);
-      }
-      chomp($ln);
-      push(@headers, $ln);
-      print $fh "$ln\n";
+    ($subject, @headers) = _read_headers($message, \@lines);
+    if(not @headers) {
+      $message->{md_status} = "temp_error";
+      return;
     }
-    close($fh);
+
     open($fi, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/INPUTMSG");
     delete $lines[-1];
     foreach my $ln ( @lines ) {
@@ -200,6 +216,8 @@ sub data_check {
       close($fr);
       rmtree($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) if not $debug;
       return 'proceed';
+    } elsif($buffer =~ /temp_error/) {
+      return reject => '451 Temporary failure, please try again later.';
     }
     return disconnect => '550 System error.' if $buffer =~ /error/;
 }

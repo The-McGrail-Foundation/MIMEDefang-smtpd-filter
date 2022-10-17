@@ -162,28 +162,29 @@ sub data_save {
     my $nbody_path = $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . '/NEWBODY';
     my @endlines;
     my @nlines;
+
+    my $rh;
+    open(my $fr, '<', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS");
+    while(my $lfr = <$fr>) {
+      chomp($lfr);
+      if($lfr =~ /^I([a-z\-]+)\s+([0-9]+)\s+(.*)/i) {
+        my $hkey = $1;
+        $rh->{$hkey}{pos} = $2;
+        $rh->{$hkey}{val} = $3;
+        my $hln = $hkey . ": " . percent_decode($rh->{$hkey}{val});
+        push(@endlines, $hln);
+      }
+    }
+    close($fr);
+    foreach my $nln ( @headers ) {
+      my @kv = split(/:/, $nln);
+      if(not exists($rh->{$kv[0]})) {
+        push(@nlines, $nln);
+      }
+    }
+    push(@nlines, @endlines);
+    push(@nlines, "");
     if(-f $nbody_path) {
-      my $rh;
-      open(my $fr, '<', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS");
-      while(my $lfr = <$fr>) {
-        chomp($lfr);
-        if($lfr =~ /^I([a-z\-]+)\s+([0-9]+)\s+(.*)/i) {
-          my $hkey = $1;
-          $rh->{$hkey}{pos} = $2;
-          $rh->{$hkey}{val} = $3;
-          my $hln = $hkey . ": " . percent_decode($rh->{$hkey}{val});
-          push(@endlines, $hln);
-        }
-      }
-      close($fr);
-      foreach my $nln ( @headers ) {
-        my @kv = split(/:/, $nln);
-        if(not exists($rh->{$kv[0]})) {
-          push(@nlines, $nln);
-        }
-      }
-      push(@nlines, @endlines);
-      push(@nlines, "");
       open(my $fn, '<', $nbody_path);
       while(my $lnb = <$fn>) {
         chomp($lnb);
@@ -192,7 +193,16 @@ sub data_save {
       close($fn);
       return @nlines;
     } else {
-      return @lines;
+      foreach my $ln ( @lines ) {
+        if($ln =~ /^$/) {
+          last;
+        } else {
+          shift(@lines);
+        }
+      }
+      push(@nlines, @endlines);
+      push(@nlines, @lines);
+      return @nlines;
     }
 }
 

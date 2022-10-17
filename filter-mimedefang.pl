@@ -55,12 +55,20 @@ unshift @INC, sub { warn "Attempted to load $_[1]"; return };
 my $MDSPOOL_PATH = "/var/spool/MIMEDefang/";
 my $SOCK_PATH = "/var/spool/MIMEDefang/mimedefang-multiplexor.sock";
 
+use constant HAS_UNVEIL => eval { require OpenBSD::Unveil; };
+
 my %opts;
 getopts("d", \%opts);
 
 my $debug = 0;
 if(defined $opts{d}) {
   $debug = 1;
+}
+
+if(HAS_UNVEIL) {
+  OpenBSD::Unveil->import;
+  unveil($MDSPOOL_PATH, "rwcx");
+  unveil();
 }
 
 my $filter = OpenSMTPd::Filter->new(

@@ -86,7 +86,42 @@ $filter->ready;
 sub helo_check {
     my ( $phase, $s ) = @_;
 
-    # warn "Checking HELO as requested\n" if $debug;
+    my $buffer;
+    my $identity;
+    my $errno;
+    my $ret;
+    my $src = $s->{state}->{src};
+    my $dest = $s->{state}->{dest};
+
+    my @src_addr = split(/\:/, $src);
+    my $src_port = pop(@src_addr);
+    my @dest_addr = split(/\:/, $dest);
+    my $dest_port = pop(@dest_addr);
+
+    my $client = IO::Socket::UNIX->new(
+      Type => SOCK_STREAM(),
+      Peer => $SOCK_PATH,
+    );
+
+    foreach my $ev ( @{$s->{events}} ) {
+      if(defined($ev->{phase}) and ($ev->{phase} eq $phase)) {
+        $identity = $ev->{identity};
+      }
+    }
+
+    $client->send("helook " . join(":", @src_addr) . " " . $s->{state}->{hostname} . " " . $identity . " " . $src_port . " " . join(":", @dest_addr) . " " . $dest_port . "\n");
+    $client->shutdown(SHUT_WR);
+
+    $client->recv($buffer, 1024);
+    $client->shutdown(SHUT_RD);
+
+    if($buffer =~ /ok\s+([0-9-]+)\s+(.*)/) {
+      $errno = $1;
+      $ret = $2;
+      return reject => '451 Temporary failure, please try again later.' if $errno eq -1;
+      return reject => '550 EHLO failure, go away.' if $errno eq 0;
+      return 'proceed' if $errno eq 1;
+    }
     return 'proceed';
 }
 

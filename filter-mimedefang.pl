@@ -172,6 +172,7 @@ sub data_save {
     my @nlines;
 
     my $rh;
+    my $ret;
     open(my $fr, '<', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS");
     while(my $lfr = <$fr>) {
       chomp($lfr);
@@ -181,6 +182,10 @@ sub data_save {
         $rh->{$hkey}{val} = $3;
         my $hln = $hkey . ": " . percent_decode($rh->{$hkey}{val});
         push(@endlines, $hln);
+      }
+      if($lfr =~ /^B(.*)/) {
+        $ret = $1;
+        $message->{md_ret} => $ret if defined $ret;
       }
     }
     close($fr);
@@ -223,15 +228,8 @@ sub data_check {
 
     my $ret;
     if($buffer =~ /ok/) {
-      open(my $fr, '<', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS");
-      while(my $lfr = <$fr>) {
-        chomp($lfr);
-        if($lfr =~ /^B(.*)/) {
-          $ret = $1;
-          return reject => $ret if defined $ret;
-        }
-      }
-      close($fr);
+      $ret = $message->{md_ret};
+      return reject => $ret if defined $ret;
       rmtree($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) if not $debug;
       return 'proceed';
     } elsif($buffer =~ /temp_error/) {

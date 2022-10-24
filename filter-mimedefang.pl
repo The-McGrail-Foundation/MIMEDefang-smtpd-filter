@@ -185,7 +185,7 @@ sub data_save {
       }
       if($lfr =~ /^B(.*)/) {
         $ret = $1;
-        $message->{md_ret} => $ret if defined $ret;
+        $message->{md_ret} = $ret if defined $ret;
       }
     }
     close($fr);

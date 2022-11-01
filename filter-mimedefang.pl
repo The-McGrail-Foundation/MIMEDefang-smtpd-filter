@@ -218,6 +218,13 @@ sub data_save {
         my $hln = $hkey . ": " . percent_decode($rh->{$hkey}{val});
         push(@endlines, $hln);
       }
+      if($lfr =~ /^N([a-z\-]+)\s+([0-9]+)\s+(.*)/i) {
+        my $hkey = $1;
+        $rh->{$hkey}{pos} = $2;
+        $rh->{$hkey}{val} = $3;
+        my $hln = $hkey . ": " . percent_decode($rh->{$hkey}{val});
+        push(@endlines, $hln);
+      }
       if($lfr =~ /^B(.*)/) {
         $ret = $1;
         $message->{md_ret} = $ret if defined $ret;

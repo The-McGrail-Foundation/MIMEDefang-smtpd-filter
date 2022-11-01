@@ -182,6 +182,17 @@ sub data_save {
     print $fc "H$identity\n";
     print $fc "E$identity\n";
     print $fc "U$subject\n";
+
+    my $relay = $state->{'src'};
+    my $realrelay;
+    if($relay =~ /\[/) {
+      # ipv6
+      $realrelay = (split(/\]/, $relay))[0];
+    } else {
+      # ipv4
+      $realrelay = (split(/\:/, $relay))[0];
+    }
+    print $fc "I$realrelay\n";
     foreach my $rcpt ( (@{$message->{'rcpt-to'}})[0] ) {
       print $fc "R$rcpt ? ? ?\n";
     }

@@ -174,6 +174,7 @@ sub data_save {
     open($fc, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/COMMANDS");
     my $sender = '<' . $message->{'mail-from'} . '>';
     print $fc "S$sender\n";
+    print $fc "=mail_addr=$sender\n";
     my $msgid = $message->{'message-id'};
     print $fc "X$msgid\n";
     my $qid = $message->{'envelope-id'};
@@ -181,6 +182,7 @@ sub data_save {
     my $identity = $state->{'identity'};
     print $fc "H$identity\n";
     print $fc "E$identity\n";
+    print $fc "=mail_host=$identity" . ".\n";
     print $fc "U$subject\n";
 
     my $relay = $state->{'src'};

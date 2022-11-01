@@ -166,7 +166,7 @@ sub data_save {
     }
 
     open($fi, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/INPUTMSG");
-    delete $lines[-1];
+    #delete $lines[-1];
     foreach my $ln ( @lines ) {
       print $fi "$ln\n";
     }
@@ -231,8 +231,8 @@ sub data_save {
       }
     }
     push(@nlines, @endlines);
-    push(@nlines, "");
     if(-f $nbody_path) {
+      push(@nlines, "");
       open(my $fn, '<', $nbody_path);
       while(my $lnb = <$fn>) {
         chomp($lnb);
@@ -241,15 +241,17 @@ sub data_save {
       close($fn);
       return @nlines;
     } else {
+      my @body;
+      my $found = 0;
       foreach my $ln ( @lines ) {
-        if($ln =~ /^$/) {
-          last;
-        } else {
-          shift(@lines);
-        }
+	if($ln eq '') {
+	  $found = 1;
+	}
+	if($found) {
+	  push(@body, $ln);
+	}
       }
-      push(@nlines, @endlines);
-      push(@nlines, @lines);
+      push(@nlines, @body);
       return @nlines;
     }
 }

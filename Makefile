@@ -1,3 +1,5 @@
+VER= 0.1
+
 LOCALBASE?= /usr/local/
 
 SCRIPT=	filter-mimedefang.pl
@@ -12,5 +14,12 @@ install:
 	${INSTALL} -d ${DESTDIR}${BINDIR}
 	${INSTALL} -m 0555 ${SCRIPT} ${DESTDIR}${BINDIR}
 	${INSTALL} -m 0644 ${MAN8} ${DESTDIR}${MANDIR}8/
+
+dist:
+	${INSTALL} -d filter-mimedefang-${VER}
+	${INSTALL} -m 0555 ${SCRIPT} filter-mimedefang-${VER}
+	${INSTALL} -m 0644 ${MAN8} filter-mimedefang-${VER}
+	tar zpcvf filter-mimedefang-${VER}.tgz filter-mimedefang-${VER}
+	rm -rf filter-mimedefang-${VER}
 
 .include <bsd.prog.mk>

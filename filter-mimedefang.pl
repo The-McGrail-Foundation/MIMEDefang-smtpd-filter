@@ -90,6 +90,7 @@ sub helo_check {
     my $identity;
     my $errno;
     my $ret;
+    my ($socket, $sockret);
     my $src = $s->{state}->{src};
     my $dest = $s->{state}->{dest};
 
@@ -102,6 +103,7 @@ sub helo_check {
       Type => SOCK_STREAM(),
       Peer => $SOCK_PATH,
     );
+    return reject => '451 Temporary failure, please try again later.' if not defined $socket;
 
     foreach my $ev ( @{$s->{events}} ) {
       if(defined($ev->{phase}) and ($ev->{phase} eq $phase)) {
@@ -109,11 +111,15 @@ sub helo_check {
       }
     }
 
-    $client->send("helook " . join(":", @src_addr) . " " . $s->{state}->{hostname} . " " . $identity . " " . $src_port . " " . join(":", @dest_addr) . " " . $dest_port . "\n");
-    $client->shutdown(SHUT_WR);
+    $sockret = $client->send("helook " . join(":", @src_addr) . " " . $s->{state}->{hostname} . " " . $identity . " " . $src_port . " " . join(":", @dest_addr) . " " . $dest_port . "\n");
+    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+    $sockret = $client->shutdown(SHUT_WR);
+    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
 
-    $client->recv($buffer, 1024);
-    $client->shutdown(SHUT_RD);
+    $sockret = $client->recv($buffer, 1024);
+    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+    $sockret = $client->shutdown(SHUT_RD);
+    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
 
     if($buffer =~ /ok\s+([0-9-]+)\s+(.*)/) {
       $errno = $1;
@@ -132,8 +138,8 @@ sub _read_headers {
   my $subject;
   my @headers = ();
 
-  mkdir($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) or return;
-  open(my $fh, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS") or return;
+  mkdir($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) or return reject => '451 Temporary failure, please try again later.';
+  open(my $fh, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS") or return reject => '451 Temporary failure, please try again later.';
   foreach my $ln ( @lines ) {
     last if($ln =~ /^$/);
     if($ln =~ /^Subject\:(.*)/) {
@@ -158,6 +164,7 @@ sub data_save {
 
     my ($fh, $fi, $fc);
     my $subject;
+    my $sockret;
 
     ($subject, @headers) = _read_headers($message, \@lines);
     if(not @headers) {
@@ -165,13 +172,13 @@ sub data_save {
       return;
     }
 
-    open($fi, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/INPUTMSG");
+    open($fi, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/INPUTMSG") or return;
     #delete $lines[-1];
     foreach my $ln ( @lines ) {
       print $fi "$ln\n";
     }
     close($fi);
-    open($fc, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/COMMANDS");
+    open($fc, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/COMMANDS") or return;
     my $sender = '<' . $message->{'mail-from'} . '>';
     print $fc "S$sender\n";
     print $fc "=mail_addr $sender\n";
@@ -209,13 +216,18 @@ sub data_save {
       Type => SOCK_STREAM(),
       Peer => $SOCK_PATH,
     );
+    return if not defined $client;
 
-    $client->send("scan $message->{'envelope-id'} " . $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "\n");
-    $client->shutdown(SHUT_WR);
+    $sockret = $client->send("scan $message->{'envelope-id'} " . $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "\n");
+    return if not defined $sockret;
+    $sockret = $client->shutdown(SHUT_WR);
+    return if not defined $sockret;
 
     my $buffer;
-    $client->recv($buffer, 1024);
-    $client->shutdown(SHUT_RD);
+    $sockret = $client->recv($buffer, 1024);
+    return if not defined $sockret;
+    $sockret = $client->shutdown(SHUT_RD);
+    return if not defined $sockret;
 
     $message->{md_status} = $buffer;
 
@@ -225,7 +237,7 @@ sub data_save {
 
     my $rh;
     my $ret;
-    open(my $fr, '<', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS");
+    open(my $fr, '<', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS") or return;
     while(my $lfr = <$fr>) {
       chomp($lfr);
       if($lfr =~ /^I([a-z\-]+)\s+([0-9]+)\s+(.*)/i) {

@@ -103,7 +103,7 @@ sub helo_check {
       Type => SOCK_STREAM(),
       Peer => $SOCK_PATH,
     );
-    return reject => '451 Temporary failure, please try again later.' if not defined $socket;
+    return reject => '451 Temporary failure, please try again later.' if not defined $client;
 
     foreach my $ev ( @{$s->{events}} ) {
       if(defined($ev->{phase}) and ($ev->{phase} eq $phase)) {
@@ -138,8 +138,8 @@ sub _read_headers {
   my $subject;
   my @headers = ();
 
-  mkdir($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) or return reject => '451 Temporary failure, please try again later.';
-  open(my $fh, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS") or return reject => '451 Temporary failure, please try again later.';
+  mkdir($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) or return;
+  open(my $fh, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS") or return;
   foreach my $ln ( @lines ) {
     last if($ln =~ /^$/);
     if($ln =~ /^Subject\:(.*)/) {
@@ -194,7 +194,7 @@ sub data_save {
       my $username = $state->{'username'};
       print $fc "=auth_authen $username\n";
     }
-    print $fc "U$subject\n";
+    print $fc "U$subject\n" if defined $subject;
 
     my $relay = $state->{'src'};
     my $realrelay;
@@ -205,9 +205,9 @@ sub data_save {
       # ipv4
       $realrelay = (split(/\:/, $relay))[0];
     }
-    print $fc "I$realrelay\n";
+    print $fc "I$realrelay\n" if defined $realrelay;
     foreach my $rcpt ( (@{$message->{'rcpt-to'}})[0] ) {
-      print $fc "R$rcpt ? ? ?\n";
+      print $fc "R$rcpt ? ? ?\n" if defined $rcpt;
     }
     print $fc "F\n";
     close($fc);

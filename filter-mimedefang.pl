@@ -42,10 +42,12 @@ To enable the filter just add the following lines into your smtpd.conf:
 
 The program has some parameters to modify its behavior.
 
-"-d" parameter to enable debug mode, when debug mode is enabled, logs will
-be more verbose and temporary files under /var/spool/MIMEDefang will not be removed.
+-d	enable debug mode, when debug mode is enabled, logs will
+	be more verbose and temporary files under /var/spool/MIMEDefang will not be removed.
 
-"-H" parameter is used to run helo checks by calling helo_check sub in mimedefang-filter(5)
+-H	run helo checks by calling helo_check sub in mimedefang-filter(5)
+
+-X	Do not add an X-Scanned-By: header.
 
 =cut
 
@@ -64,16 +66,20 @@ my $SOCK_PATH = "/var/spool/MIMEDefang/mimedefang-multiplexor.sock";
 use constant HAS_UNVEIL => eval { require OpenBSD::Unveil; };
 
 my %opts;
-getopts("dH", \%opts);
+getopts("dHX", \%opts);
 
 my $debug = 0;
 my $helocheck = 0;
+my $xscannedby = 1;
 
 if(defined $opts{d}) {
   $debug = 1;
 }
 if(defined $opts{H}) {
   $helocheck = 1;
+}
+if(defined $opts{X}) {
+  $xscannedby = 0;
 }
 
 if(HAS_UNVEIL) {
@@ -166,6 +172,20 @@ sub _read_headers {
   return ($subject, @headers);
 }
 
+sub _get_realip {
+   my $ip = shift;
+
+   my $realip;
+   if($ip =~ /\[/) {
+     # ipv6
+     $realip = (split(/\]/, $ip))[0];
+   } else {
+     # ipv4
+     $realip = (split(/\:/, $ip))[0];
+   }
+   return $realip;
+}
+
 sub data_save {
     my ( $phase, $s, $lines ) = @_;
     my @lines = @{$lines};
@@ -209,15 +229,7 @@ sub data_save {
     }
     print $fc "U$subject\n" if defined $subject;
 
-    my $relay = $state->{'src'};
-    my $realrelay;
-    if($relay =~ /\[/) {
-      # ipv6
-      $realrelay = (split(/\]/, $relay))[0];
-    } else {
-      # ipv4
-      $realrelay = (split(/\:/, $relay))[0];
-    }
+    my $realrelay = _get_realip($state->{'src'});
     print $fc "I$realrelay\n" if defined $realrelay;
     foreach my $rcpt ( (@{$message->{'rcpt-to'}})[0] ) {
       print $fc "R$rcpt ? ? ?\n" if defined $rcpt;
@@ -278,6 +290,10 @@ sub data_save {
       if(not exists($rh->{$kv[0]})) {
         push(@nlines, $nln);
       }
+    }
+    if($xscannedby) {
+      my $dest = _get_realip($state->{'dest'});
+      push(@endlines, "X-Scanned-By: MIMEDefang " . $Mail::MIMEDefang::VERSION . " on $dest");
     }
     push(@nlines, @endlines);
     if(-f $nbody_path) {

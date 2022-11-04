@@ -64,6 +64,7 @@ my $MDSPOOL_PATH = "/var/spool/MIMEDefang/";
 my $SOCK_PATH = "/var/spool/MIMEDefang/mimedefang-multiplexor.sock";
 
 use constant HAS_UNVEIL => eval { require OpenBSD::Unveil; };
+use constant HAS_PLEDGE => eval { require OpenBSD::Pledge; };
 
 my %opts;
 getopts("dHX", \%opts);
@@ -84,8 +85,13 @@ if(defined $opts{X}) {
 
 if(HAS_UNVEIL) {
   OpenBSD::Unveil->import;
-  unveil($MDSPOOL_PATH, "rwcx");
-  unveil();
+  unveil($MDSPOOL_PATH, "rwcx") || die "Unable to unveil: $!";
+  unveil() || die "Unable to lock unveil: $!";
+}
+
+if(HAS_PLEDGE) {
+  OpenBSD::Pledge->import;
+  pledge( qw( rpath wpath cpath unix ) ) || die "Unable to pledge: $!";
 }
 
 my $filter = OpenSMTPd::Filter->new(

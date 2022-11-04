@@ -38,8 +38,14 @@ To enable the filter just add the following lines into your smtpd.conf:
     filter "mimedefang" proc-exec "filter-mimedefang.pl" user _mdefang group _mdefang
     listen on all filter "mimedefang"
 
-The program has a "-d" parameter to enable debug mode, when debug mode is enabled, logs will
+=head2 USAGE
+
+The program has some parameters to modify its behavior.
+
+"-d" parameter to enable debug mode, when debug mode is enabled, logs will
 be more verbose and temporary files under /var/spool/MIMEDefang will not be removed.
+
+"-H" parameter is used to run helo checks by calling helo_check sub in mimedefang-filter(5)
 
 =cut
 
@@ -58,11 +64,16 @@ my $SOCK_PATH = "/var/spool/MIMEDefang/mimedefang-multiplexor.sock";
 use constant HAS_UNVEIL => eval { require OpenBSD::Unveil; };
 
 my %opts;
-getopts("d", \%opts);
+getopts("dH", \%opts);
 
 my $debug = 0;
+my $helocheck = 0;
+
 if(defined $opts{d}) {
   $debug = 1;
+}
+if(defined $opts{H}) {
+  $helocheck = 1;
 }
 
 if(HAS_UNVEIL) {
@@ -85,6 +96,8 @@ $filter->ready;
 
 sub helo_check {
     my ( $phase, $s ) = @_;
+
+    return 'proceed' if $helocheck ne 1;
 
     my $buffer;
     my $identity;

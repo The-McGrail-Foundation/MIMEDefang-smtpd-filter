@@ -334,6 +334,7 @@ sub data_check {
     my $message = $state->{message};
     my $buffer = $message->{md_status};
 
+    return reject => '451 Temporary failure, please try again later.' if not defined $buffer;
     my $ret;
     if($buffer =~ /ok/) {
       $ret = $message->{md_ret};

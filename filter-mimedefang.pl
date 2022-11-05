@@ -61,47 +61,51 @@ use OpenSMTPd::Filter;
 unshift @INC, sub { warn "Attempted to load $_[1]"; return };
 
 my $MDSPOOL_PATH = "/var/spool/MIMEDefang/";
-my $SOCK_PATH = "/var/spool/MIMEDefang/mimedefang-multiplexor.sock";
+my $SOCK_PATH    = "/var/spool/MIMEDefang/mimedefang-multiplexor.sock";
 
 use constant HAS_UNVEIL => eval { require OpenBSD::Unveil; };
 use constant HAS_PLEDGE => eval { require OpenBSD::Pledge; };
 
 my %opts;
-getopts("dHX", \%opts);
+getopts( "dHX", \%opts );
 
-my $debug = 0;
-my $helocheck = 0;
+my $debug      = 0;
+my $helocheck  = 0;
 my $xscannedby = 1;
 
-if(defined $opts{d}) {
-  $debug = 1;
+if ( defined $opts{d} ) {
+    $debug = 1;
 }
-if(defined $opts{H}) {
-  $helocheck = 1;
+if ( defined $opts{H} ) {
+    $helocheck = 1;
 }
-if(defined $opts{X}) {
-  $xscannedby = 0;
-}
-
-if(HAS_UNVEIL) {
-  OpenBSD::Unveil->import;
-  unveil($MDSPOOL_PATH, "rwcx") || die "Unable to unveil: $!";
-  unveil() || die "Unable to lock unveil: $!";
+if ( defined $opts{X} ) {
+    $xscannedby = 0;
 }
 
-if(HAS_PLEDGE) {
-  OpenBSD::Pledge->import;
-  pledge( qw( rpath wpath cpath unix ) ) || die "Unable to pledge: $!";
+if (HAS_UNVEIL) {
+    OpenBSD::Unveil->import;
+    unveil( $MDSPOOL_PATH, "rwcx" ) || die "Unable to unveil: $!";
+    unveil()                        || die "Unable to lock unveil: $!";
+}
+
+if (HAS_PLEDGE) {
+    OpenBSD::Pledge->import;
+    pledge(qw( rpath wpath cpath unix )) || die "Unable to pledge: $!";
 }
 
 my $filter = OpenSMTPd::Filter->new(
     debug => $debug,
-    on    => { filter => { 'smtp-in' => {
-        'helo'      => \&helo_check,
-        'ehlo'      => \&helo_check,
-        'data-lines' => \&data_save,
-        'commit' => \&data_check,
-    } } }
+    on    => {
+        filter => {
+            'smtp-in' => {
+                'helo'       => \&helo_check,
+                'ehlo'       => \&helo_check,
+                'data-lines' => \&data_save,
+                'commit'     => \&data_check,
+            }
+        }
+    }
 );
 
 $filter->ready;
@@ -115,85 +119,104 @@ sub helo_check {
     my $identity;
     my $errno;
     my $ret;
-    my ($socket, $sockret);
-    my $src = $s->{state}->{src};
+    my ( $socket, $sockret );
+    my $src  = $s->{state}->{src};
     my $dest = $s->{state}->{dest};
 
-    my @src_addr = split(/\:/, $src);
-    my $src_port = pop(@src_addr);
-    my @dest_addr = split(/\:/, $dest);
+    my @src_addr  = split( /\:/, $src );
+    my $src_port  = pop(@src_addr);
+    my @dest_addr = split( /\:/, $dest );
     my $dest_port = pop(@dest_addr);
 
     my $client = IO::Socket::UNIX->new(
-      Type => SOCK_STREAM(),
-      Peer => $SOCK_PATH,
+        Type => SOCK_STREAM(),
+        Peer => $SOCK_PATH,
     );
-    return reject => '451 Temporary failure, please try again later.' if not defined $client;
+    return reject => '451 Temporary failure, please try again later.'
+      if not defined $client;
 
-    foreach my $ev ( @{$s->{events}} ) {
-      if(defined($ev->{phase}) and ($ev->{phase} eq $phase)) {
-        $identity = $ev->{identity};
-      }
+    foreach my $ev ( @{ $s->{events} } ) {
+        if ( defined( $ev->{phase} ) and ( $ev->{phase} eq $phase ) ) {
+            $identity = $ev->{identity};
+        }
     }
 
-    if($client and $client->connected()) {
-      $sockret = $client->send("helook " . join(":", @src_addr) . " " . $s->{state}->{hostname} . " " . $identity . " " . $src_port . " " . join(":", @dest_addr) . " " . $dest_port . "\n");
-      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
-      $sockret = $client->shutdown(SHUT_WR);
-      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+    if ( $client and $client->connected() ) {
+        $sockret =
+          $client->send( "helook "
+              . join( ":", @src_addr ) . " "
+              . $s->{state}->{hostname} . " "
+              . $identity . " "
+              . $src_port . " "
+              . join( ":", @dest_addr ) . " "
+              . $dest_port
+              . "\n" );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_WR);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
 
-      $sockret = $client->recv($buffer, 1024);
-      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
-      $sockret = $client->shutdown(SHUT_RD);
-      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
-    } else {
-      return reject => '451 Temporary failure, please try again later.';
+        $sockret = $client->recv( $buffer, 1024 );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_RD);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+    }
+    else {
+        return reject => '451 Temporary failure, please try again later.';
     }
 
-    if($buffer =~ /ok\s+([0-9-]+)\s+(.*)/) {
-      $errno = $1;
-      $ret = $2;
-      return reject => '451 Temporary failure, please try again later.' if $errno eq -1;
-      return reject => '550 EHLO failure, go away.' if $errno eq 0;
-      return 'proceed' if $errno eq 1;
+    if ( $buffer =~ /ok\s+([0-9-]+)\s+(.*)/ ) {
+        $errno = $1;
+        $ret   = $2;
+        return reject => '451 Temporary failure, please try again later.'
+          if $errno eq -1;
+        return reject => '550 EHLO failure, go away.' if $errno eq 0;
+        return 'proceed' if $errno eq 1;
     }
     return 'proceed';
 }
 
 sub _read_headers {
-  my ( $message, $lines ) = @_;
-  my @lines = @{$lines};
+    my ( $message, $lines ) = @_;
+    my @lines = @{$lines};
 
-  my $subject;
-  my @headers = ();
+    my $subject;
+    my @headers = ();
 
-  mkdir($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) or return;
-  open(my $fh, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS") or return;
-  foreach my $ln ( @lines ) {
-    last if($ln =~ /^$/);
-    if($ln =~ /^Subject\:(.*)/) {
-      $subject = percent_encode($1);
+    mkdir( $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} ) or return;
+    open( my $fh, '>',
+        $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/HEADERS" )
+      or return;
+    foreach my $ln (@lines) {
+        last if ( $ln =~ /^$/ );
+        if ( $ln =~ /^Subject\:(.*)/ ) {
+            $subject = percent_encode($1);
+        }
+        chomp($ln);
+        push( @headers, $ln );
+        print $fh "$ln\n";
     }
-    chomp($ln);
-    push(@headers, $ln);
-    print $fh "$ln\n";
-  }
-  close($fh);
-  return ($subject, @headers);
+    close($fh);
+    return ( $subject, @headers );
 }
 
 sub _get_realip {
-   my $ip = shift;
+    my $ip = shift;
 
-   my $realip;
-   if($ip =~ /\[/) {
-     # ipv6
-     $realip = (split(/\]/, $ip))[0];
-   } else {
-     # ipv4
-     $realip = (split(/\:/, $ip))[0];
-   }
-   return $realip;
+    my $realip;
+    if ( $ip =~ /\[/ ) {
+
+        # ipv6
+        $realip = ( split( /\]/, $ip ) )[0];
+    }
+    else {
+        # ipv4
+        $realip = ( split( /\:/, $ip ) )[0];
+    }
+    return $realip;
 }
 
 sub data_save {
@@ -205,23 +228,28 @@ sub data_save {
     my $state   = $s->{state};
     my $message = $state->{message};
 
-    my ($fh, $fi, $fc);
+    my ( $fh, $fi, $fc );
     my $subject;
     my $sockret;
 
-    ($subject, @headers) = _read_headers($message, \@lines);
-    if(not @headers) {
-      $message->{md_status} = "temp_error";
-      return;
+    ( $subject, @headers ) = _read_headers( $message, \@lines );
+    if ( not @headers ) {
+        $message->{md_status} = "temp_error";
+        return;
     }
 
-    open($fi, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/INPUTMSG") or return;
+    open( $fi, '>',
+        $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/INPUTMSG" )
+      or return;
+
     #delete $lines[-1];
-    foreach my $ln ( @lines ) {
-      print $fi "$ln\n";
+    foreach my $ln (@lines) {
+        print $fi "$ln\n";
     }
     close($fi);
-    open($fc, '>', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/COMMANDS") or return;
+    open( $fc, '>',
+        $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/COMMANDS" )
+      or return;
     my $sender = '<' . $message->{'mail-from'} . '>';
     print $fc "S$sender\n";
     print $fc "=mail_addr $sender\n";
@@ -233,106 +261,120 @@ sub data_save {
     print $fc "H$identity\n";
     print $fc "E$identity\n";
     print $fc "=mail_host $identity" . ".\n";
-    if(defined $state->{'username'}) {
-      my $username = $state->{'username'};
-      print $fc "=auth_authen $username\n";
+
+    if ( defined $state->{'username'} ) {
+        my $username = $state->{'username'};
+        print $fc "=auth_authen $username\n";
     }
     print $fc "U$subject\n" if defined $subject;
 
-    my $realrelay = _get_realip($state->{'src'});
+    my $realrelay = _get_realip( $state->{'src'} );
     print $fc "I$realrelay\n" if defined $realrelay;
-    foreach my $rcpt ( (@{$message->{'rcpt-to'}})[0] ) {
-      print $fc "R$rcpt ? ? ?\n" if defined $rcpt;
+    foreach my $rcpt ( ( @{ $message->{'rcpt-to'} } )[0] ) {
+        print $fc "R$rcpt ? ? ?\n" if defined $rcpt;
     }
     print $fc "F\n";
     close($fc);
 
     my $client = IO::Socket::UNIX->new(
-      Type => SOCK_STREAM(),
-      Peer => $SOCK_PATH,
+        Type => SOCK_STREAM(),
+        Peer => $SOCK_PATH,
     );
     return if not defined $client;
 
     my $buffer;
-    if($client and $client->connected()) {
-      $sockret = $client->send("scan $message->{'envelope-id'} " . $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "\n");
-      return if not defined $sockret;
-      $sockret = $client->shutdown(SHUT_WR);
-      return if not defined $sockret;
+    if ( $client and $client->connected() ) {
+        $sockret =
+          $client->send( "scan $message->{'envelope-id'} "
+              . $MDSPOOL_PATH
+              . "mdefang-"
+              . $message->{'envelope-id'}
+              . "\n" );
+        return if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_WR);
+        return if not defined $sockret;
 
-      $sockret = $client->recv($buffer, 1024);
-      return if not defined $sockret;
-      $sockret = $client->shutdown(SHUT_RD);
-      return if not defined $sockret;
-      $client->close();
-      $message->{md_status} = $buffer;
-    } else {
-      $message->{md_status} = 'temp_error';
-      return;
+        $sockret = $client->recv( $buffer, 1024 );
+        return if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_RD);
+        return if not defined $sockret;
+        $client->close();
+        $message->{md_status} = $buffer;
+    }
+    else {
+        $message->{md_status} = 'temp_error';
+        return;
     }
 
-    my $nbody_path = $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . '/NEWBODY';
+    my $nbody_path =
+      $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . '/NEWBODY';
     my @endlines;
     my @nlines;
 
     my $rh;
     my $ret;
-    open(my $fr, '<', $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS") or return;
-    while(my $lfr = <$fr>) {
-      chomp($lfr);
-      if($lfr =~ /^I([a-z\-]+)\s+([0-9]+)\s+(.*)/i) {
-        my $hkey = $1;
-        $rh->{$hkey}{pos} = $2;
-        $rh->{$hkey}{val} = $3;
-        my $hln = $hkey . ": " . percent_decode($rh->{$hkey}{val});
-        push(@endlines, $hln);
-      }
-      if($lfr =~ /^N([a-z\-]+)\s+([0-9]+)\s+(.*)/i) {
-        my $hkey = $1;
-        $rh->{$hkey}{pos} = $2;
-        $rh->{$hkey}{val} = $3;
-        my $hln = $hkey . ": " . percent_decode($rh->{$hkey}{val});
-        push(@endlines, $hln);
-      }
-      if($lfr =~ /^B(.*)/) {
-        $ret = $1;
-        $message->{md_ret} = $ret if defined $ret;
-      }
+    open( my $fr, '<',
+        $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "/RESULTS" )
+      or return;
+    while ( my $lfr = <$fr> ) {
+        chomp($lfr);
+        if ( $lfr =~ /^I([a-z\-]+)\s+([0-9]+)\s+(.*)/i ) {
+            my $hkey = $1;
+            $rh->{$hkey}{pos} = $2;
+            $rh->{$hkey}{val} = $3;
+            my $hln = $hkey . ": " . percent_decode( $rh->{$hkey}{val} );
+            push( @endlines, $hln );
+        }
+        if ( $lfr =~ /^N([a-z\-]+)\s+([0-9]+)\s+(.*)/i ) {
+            my $hkey = $1;
+            $rh->{$hkey}{pos} = $2;
+            $rh->{$hkey}{val} = $3;
+            my $hln = $hkey . ": " . percent_decode( $rh->{$hkey}{val} );
+            push( @endlines, $hln );
+        }
+        if ( $lfr =~ /^B(.*)/ ) {
+            $ret = $1;
+            $message->{md_ret} = $ret if defined $ret;
+        }
     }
     close($fr);
-    foreach my $nln ( @headers ) {
-      my @kv = split(/:/, $nln);
-      if(not exists($rh->{$kv[0]})) {
-        push(@nlines, $nln);
-      }
+    foreach my $nln (@headers) {
+        my @kv = split( /:/, $nln );
+        if ( not exists( $rh->{ $kv[0] } ) ) {
+            push( @nlines, $nln );
+        }
     }
-    if($xscannedby) {
-      my $dest = _get_realip($state->{'dest'});
-      push(@endlines, "X-Scanned-By: MIMEDefang " . $Mail::MIMEDefang::VERSION . " on $dest");
+    if ($xscannedby) {
+        my $dest = _get_realip( $state->{'dest'} );
+        push( @endlines,
+                "X-Scanned-By: MIMEDefang "
+              . $Mail::MIMEDefang::VERSION
+              . " on $dest" );
     }
-    push(@nlines, @endlines);
-    if(-f $nbody_path) {
-      push(@nlines, "");
-      open(my $fn, '<', $nbody_path);
-      while(my $lnb = <$fn>) {
-        chomp($lnb);
-        push(@nlines, $lnb);
-      }
-      close($fn);
-      return @nlines;
-    } else {
-      my @body;
-      my $found = 0;
-      foreach my $ln ( @lines ) {
-	if($ln eq '') {
-	  $found = 1;
-	}
-	if($found) {
-	  push(@body, $ln);
-	}
-      }
-      push(@nlines, @body);
-      return @nlines;
+    push( @nlines, @endlines );
+    if ( -f $nbody_path ) {
+        push( @nlines, "" );
+        open( my $fn, '<', $nbody_path );
+        while ( my $lnb = <$fn> ) {
+            chomp($lnb);
+            push( @nlines, $lnb );
+        }
+        close($fn);
+        return @nlines;
+    }
+    else {
+        my @body;
+        my $found = 0;
+        foreach my $ln (@lines) {
+            if ( $ln eq '' ) {
+                $found = 1;
+            }
+            if ($found) {
+                push( @body, $ln );
+            }
+        }
+        push( @nlines, @body );
+        return @nlines;
     }
 }
 
@@ -341,17 +383,20 @@ sub data_check {
 
     my $state   = $s->{state};
     my $message = $state->{message};
-    my $buffer = $message->{md_status};
+    my $buffer  = $message->{md_status};
 
-    return reject => '451 Temporary failure, please try again later.' if not defined $buffer;
+    return reject => '451 Temporary failure, please try again later.'
+      if not defined $buffer;
     my $ret;
-    if($buffer =~ /ok/) {
-      $ret = $message->{md_ret};
-      return reject => $ret if defined $ret;
-      rmtree($MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'}) if not $debug;
-      return 'proceed';
-    } elsif($buffer =~ /temp_error/) {
-      return reject => '451 Temporary failure, please try again later.';
+    if ( $buffer =~ /ok/ ) {
+        $ret = $message->{md_ret};
+        return reject => $ret if defined $ret;
+        rmtree( $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} )
+          if not $debug;
+        return 'proceed';
+    }
+    elsif ( $buffer =~ /temp_error/ ) {
+        return reject => '451 Temporary failure, please try again later.';
     }
     return disconnect => '550 System error.' if $buffer =~ /error/;
 }

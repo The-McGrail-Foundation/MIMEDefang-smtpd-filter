@@ -352,7 +352,7 @@ sub data_save {
         push @endlines,
                 'X-Scanned-By: MIMEDefang '
               . $Mail::MIMEDefang::VERSION
-              . " on $dest" );
+              . " on $dest";
     }
     push @nlines, @endlines;
     if ( -f $nbody_path ) {

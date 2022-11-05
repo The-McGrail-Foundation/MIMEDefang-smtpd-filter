@@ -136,15 +136,19 @@ sub helo_check {
       }
     }
 
-    $sockret = $client->send("helook " . join(":", @src_addr) . " " . $s->{state}->{hostname} . " " . $identity . " " . $src_port . " " . join(":", @dest_addr) . " " . $dest_port . "\n");
-    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
-    $sockret = $client->shutdown(SHUT_WR);
-    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+    if($client and $client->connected()) {
+      $sockret = $client->send("helook " . join(":", @src_addr) . " " . $s->{state}->{hostname} . " " . $identity . " " . $src_port . " " . join(":", @dest_addr) . " " . $dest_port . "\n");
+      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+      $sockret = $client->shutdown(SHUT_WR);
+      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
 
-    $sockret = $client->recv($buffer, 1024);
-    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
-    $sockret = $client->shutdown(SHUT_RD);
-    return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+      $sockret = $client->recv($buffer, 1024);
+      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+      $sockret = $client->shutdown(SHUT_RD);
+      return reject => '451 Temporary failure, please try again later.' if not defined $sockret;
+    } else {
+      return reject => '451 Temporary failure, please try again later.';
+    }
 
     if($buffer =~ /ok\s+([0-9-]+)\s+(.*)/) {
       $errno = $1;
@@ -249,18 +253,23 @@ sub data_save {
     );
     return if not defined $client;
 
-    $sockret = $client->send("scan $message->{'envelope-id'} " . $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "\n");
-    return if not defined $sockret;
-    $sockret = $client->shutdown(SHUT_WR);
-    return if not defined $sockret;
-
     my $buffer;
-    $sockret = $client->recv($buffer, 1024);
-    return if not defined $sockret;
-    $sockret = $client->shutdown(SHUT_RD);
-    return if not defined $sockret;
+    if($client and $client->connected()) {
+      $sockret = $client->send("scan $message->{'envelope-id'} " . $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . "\n");
+      return if not defined $sockret;
+      $sockret = $client->shutdown(SHUT_WR);
+      return if not defined $sockret;
 
-    $message->{md_status} = $buffer;
+      $sockret = $client->recv($buffer, 1024);
+      return if not defined $sockret;
+      $sockret = $client->shutdown(SHUT_RD);
+      return if not defined $sockret;
+      $client->close();
+      $message->{md_status} = $buffer;
+    } else {
+      $message->{md_status} = 'temp_error';
+      return;
+    }
 
     my $nbody_path = $MDSPOOL_PATH . "mdefang-" . $message->{'envelope-id'} . '/NEWBODY';
     my @endlines;

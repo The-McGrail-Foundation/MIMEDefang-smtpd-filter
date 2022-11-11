@@ -51,6 +51,7 @@ The program has some parameters to modify its behavior.
 
 =cut
 
+use Carp;
 use File::Path;
 use Getopt::Std;
 use IO::Socket::UNIX;

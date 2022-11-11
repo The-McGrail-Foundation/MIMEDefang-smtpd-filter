@@ -245,7 +245,7 @@ sub data_save {
         $message->{md_spool_dir} . '/INPUTMSG' )
       or return;
 
-    #delete $lines[-1];
+    delete $lines[-1];
     foreach my $ln (@lines) {
         print $fi "$ln\n";
     }

@@ -348,14 +348,14 @@ sub data_save {
             push @nlines, $nln;
         }
     }
+    unshift @nlines, @endlines;
     if ($xscannedby) {
         my $dest = _get_realip( $state->{'dest'} );
-        push @endlines,
+        push @nlines,
                 'X-Scanned-By: MIMEDefang '
               . $Mail::MIMEDefang::VERSION
               . " on $dest";
     }
-    push @nlines, @endlines;
     if ( -f $nbody_path ) {
         push @nlines, '';
         open( my $fn, '<', $nbody_path );

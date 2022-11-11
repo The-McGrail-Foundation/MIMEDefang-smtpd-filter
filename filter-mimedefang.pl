@@ -189,9 +189,10 @@ sub _read_headers {
     my $subject;
     my @headers = ();
 
-    mkdir( $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'} ) or return;
+    $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'};
+    mkdir( $message->{md_spool_dir} ) or return;
     open( my $fh, '>',
-        $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'} . '/HEADERS' )
+        $message->{md_spool_dir} . '/HEADERS' )
       or return;
     foreach my $ln (@lines) {
         last if ( $ln =~ /^$/ );
@@ -241,7 +242,7 @@ sub data_save {
     }
 
     open( $fi, '>',
-        $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'} . '/INPUTMSG' )
+        $message->{md_spool_dir} . '/INPUTMSG' )
       or return;
 
     #delete $lines[-1];
@@ -250,7 +251,7 @@ sub data_save {
     }
     close $fi;
     open( $fc, '>',
-        $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'} . '/COMMANDS' )
+        $message->{md_spool_dir} . '/COMMANDS' )
       or return;
     my $sender = '<' . $message->{'mail-from'} . '>';
     print $fc "S$sender\n";
@@ -309,14 +310,14 @@ sub data_save {
     }
 
     my $nbody_path =
-      $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'} . '/NEWBODY';
+      $message->{md_spool_dir} . '/NEWBODY';
     my @endlines;
     my @nlines;
 
     my $rh;
     my $ret;
     open( my $fr, '<',
-        $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'} . '/RESULTS' )
+        $message->{md_spool_dir} . '/RESULTS' )
       or return;
     while ( my $lfr = <$fr> ) {
         chomp $lfr;
@@ -335,7 +336,7 @@ sub data_save {
             push @endlines, $hln;
         }
         if ( $lfr =~ /^B(.*)/ ) {
-            $ret = $1; 
+            $ret = $1;
             if(defined $ret) {
               $message->{md_ret} = $ret;
             }
@@ -396,7 +397,7 @@ sub data_check {
         $ret = $message->{md_ret};
         return reject => $ret if defined $ret;
         if(not $debug) {
-          rmtree( $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'} );
+          rmtree( $message->{md_spool_dir} );
         }
         return 'proceed';
     }

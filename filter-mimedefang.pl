@@ -247,7 +247,11 @@ sub data_save {
 
     delete $lines[-1];
     foreach my $ln (@lines) {
+      if ( $ln =~ /^\.(.+)$/ ) {
+        print $fi "$1\n";
+      } else {
         print $fi "$ln\n";
+      }
     }
     close $fi;
     open( $fc, '>',

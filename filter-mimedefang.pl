@@ -86,6 +86,8 @@ if ( defined $opts{X} ) {
 
 if (HAS_UNVEIL) {
     OpenBSD::Unveil->import;
+    # Needed for rmtree to work
+    unveil( '/', "r" ) || croak "Unable to unveil: $!";
     unveil( $MDSPOOL_PATH, "rwcx" ) || croak "Unable to unveil: $!";
     unveil()                        || croak "Unable to lock unveil: $!";
 }
@@ -418,8 +420,6 @@ sub cleanup {
     my $message = $state->{message};
 
     if(not $debug) {
-      if(not HAS_UNVEIL) {
-        rmtree( $message->{md_spool_dir} );
-      }
+      rmtree( $message->{md_spool_dir} );
     }
 }

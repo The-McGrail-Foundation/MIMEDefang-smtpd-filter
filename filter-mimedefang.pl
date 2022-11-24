@@ -98,6 +98,9 @@ if (HAS_PLEDGE) {
 my $filter = OpenSMTPd::Filter->new(
     debug => $debug,
     on    => {
+        report => { 'smtp-in' => {
+            'link-disconnect' => \&cleanup,
+        } },
         filter => {
             'smtp-in' => {
                 'helo'       => \&helo_check,
@@ -400,13 +403,23 @@ sub data_check {
     if ( $buffer =~ /ok/ ) {
         $ret = $message->{md_ret};
         return reject => $ret if defined $ret;
-        if(not $debug) {
-          rmtree( $message->{md_spool_dir} );
-        }
         return 'proceed';
     }
     elsif ( $buffer =~ /temp_error/ ) {
         return reject => '451 Temporary failure, please try again later.';
     }
     return disconnect => '550 System error.' if $buffer =~ /error/;
+}
+
+sub cleanup {
+    my ( $phase, $s ) = @_;
+
+    my $state   = $s->{state};
+    my $message = $state->{message};
+
+    if(not $debug) {
+      if(not HAS_UNVEIL) {
+        rmtree( $message->{md_spool_dir} );
+      }
+    }
 }

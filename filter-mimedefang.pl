@@ -349,7 +349,7 @@ sub data_save {
             my $hln = $hkey . ': ' . percent_decode( $rh->{$hkey}{val} );
             push @endlines, $hln;
         }
-        if ( $lfr =~ /^B(.*)/ ) {
+        if ( $lfr =~ /^(?:B|T)(.*)/ ) {
             $ret = $1;
             if(defined $ret) {
               $message->{md_ret} = $ret;

@@ -330,6 +330,8 @@ sub data_save {
 
     my $rh;
     my $ret;
+    my $newbody = 0;
+    my $newctype;
     open( my $fr, '<',
         $message->{md_spool_dir} . '/RESULTS' )
       or return;
@@ -340,7 +342,7 @@ sub data_save {
             $rh->{$hkey}{pos} = $2;
             $rh->{$hkey}{val} = $3;
             my $hln = $hkey . ': ' . percent_decode( $rh->{$hkey}{val} );
-            push( @endlines, $hln );
+            push @endlines, $hln;
         }
         if ( $lfr =~ /^N([a-z\-]+)\s+([0-9]+)\s+(.*)/i ) {
             my $hkey = $1;
@@ -355,13 +357,39 @@ sub data_save {
               $message->{md_ret} = $ret;
             }
         }
+        if ( $lfr =~ /^C/ ) {
+           $newbody = 1;
+        }
+        if ( $lfr =~ /^D/ ) {
+          # XXX discard command is not supported by smtpd-filters
+        }
+        if ( $lfr =~ /^M(.*)/ ) {
+           $newctype = $1;
+           push @endlines, "Content-Type: " . percent_decode($newctype);
+        }
     }
     close $fr;
+
+    my $mimeadded = 0;
+    my $ctypeadded = 0;
     foreach my $nln (@headers) {
         my @kv = split( /:/, $nln );
+        if($newctype and not $mimeadded) {
+          if($nln =~ /^MIME\-Version/) {
+            $mimeadded = 1;
+          }
+          if($nln =~ /^Content\-Type/) {
+            $ctypeadded = 1;
+            next;
+          }
+        }
         if ( not exists( $rh->{ $kv[0] } ) ) {
             push @nlines, $nln;
         }
+    }
+    if($newctype and not $mimeadded) {
+      push @nlines, "MIME-Version: 1.0";
+      $mimeadded = 1;
     }
     unshift @nlines, @endlines;
     if ($xscannedby) {
@@ -371,7 +399,7 @@ sub data_save {
               . $Mail::MIMEDefang::VERSION
               . " on $dest";
     }
-    if ( -f $nbody_path ) {
+    if ( $newbody and -f $nbody_path ) {
         push @nlines, '';
         open( my $fn, '<', $nbody_path );
         while ( my $lnb = <$fn> ) {

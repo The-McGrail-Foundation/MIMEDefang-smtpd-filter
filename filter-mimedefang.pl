@@ -55,7 +55,8 @@ use Carp;
 use File::Path;
 use Getopt::Std;
 use IO::Socket::UNIX;
-use Mail::MIMEDefang;
+use Mail::MIMEDefang 3.3;
+use Mail::MIMEDefang::Utils;
 use OpenSMTPd::Filter;
 
 # This lets us see if there are other modules we may need to preload
@@ -194,6 +195,11 @@ sub _read_headers {
     my $subject;
     my @headers = ();
 
+    my $mx_id = Mail::MIMEDefang::Utils::gen_mx_id();
+    $message->{'md_mx_id'} = $mx_id;
+    if(not defined $message->{'envelope-id'}) {
+      $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'md_mx_id'};
+    }
     $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'};
     mkdir( $message->{md_spool_dir} ) or return;
     open( my $fh, '>',
@@ -282,9 +288,7 @@ sub data_save {
 
     my $realrelay = _get_realip( $state->{'src'} );
     print $fc "I$realrelay\n" if defined $realrelay;
-    my $mx_id = Mail::MIMEDefang::Utils::gen_mx_id();
-    $message->{'md_mx_id'} = $mx_id;
-    print $fc "i$mx_id\n" if defined $mx_id;
+    print $fc "i$message->{'md_mx_id'}\n" if defined $message->{'md_mx_id'};
     foreach my $rcpt ( ( @{ $message->{'rcpt-to'} } )[0] ) {
         print $fc "R$rcpt ? ? ?\n" if defined $rcpt;
     }
@@ -301,9 +305,7 @@ sub data_save {
     if ( $client and $client->connected() ) {
         $sockret =
           $client->send( "scan $message->{'envelope-id'} "
-              . $MDSPOOL_PATH
-              . 'mdefang-'
-              . $message->{'envelope-id'}
+              . $message->{'md_spool_dir'}
               . "\n" );
         return if not defined $sockret;
         $sockret = $client->shutdown(SHUT_WR);

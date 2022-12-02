@@ -361,11 +361,14 @@ sub data_save {
            $newbody = 1;
         }
         if ( $lfr =~ /^D/ ) {
-          # XXX discard command is not supported by smtpd-filters
+          # XXX discard command is not supported by smtpd-filters(7)
         }
         if ( $lfr =~ /^M(.*)/ ) {
            $newctype = $1;
            push @endlines, "Content-Type: " . percent_decode($newctype);
+        }
+        if ( $lfr =~ /^Q/ ) {
+          # XXX quarantine command is not supported by smtpd-filters(7)
         }
     }
     close $fr;

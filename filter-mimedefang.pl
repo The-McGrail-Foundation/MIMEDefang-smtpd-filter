@@ -349,7 +349,7 @@ sub data_save {
             $rh->{$hkey}{pos} = $2;
             $rh->{$hkey}{val} = $3;
             my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
-            push @endlines, $hln;
+            splice @endlines, percent_decode($rh->{$hkey}{pos}), 0, $hln;
         }
         if ( $lfr =~ /^(?:B|T)(.*)/ ) {
             $ret = $1;

@@ -341,14 +341,14 @@ sub data_save {
             my $hkey = $1;
             $rh->{$hkey}{pos} = $2;
             $rh->{$hkey}{val} = $3;
-            my $hln = $hkey . ': ' . percent_decode( $rh->{$hkey}{val} );
+            my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
             push @endlines, $hln;
         }
         if ( $lfr =~ /^N([a-z\-]+)\s+([0-9]+)\s+(.*)/i ) {
             my $hkey = $1;
             $rh->{$hkey}{pos} = $2;
             $rh->{$hkey}{val} = $3;
-            my $hln = $hkey . ': ' . percent_decode( $rh->{$hkey}{val} );
+            my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
             push @endlines, $hln;
         }
         if ( $lfr =~ /^(?:B|T)(.*)/ ) {

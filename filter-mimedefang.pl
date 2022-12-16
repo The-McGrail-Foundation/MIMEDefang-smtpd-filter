@@ -340,13 +340,15 @@ sub data_save {
         if ( $lfr =~ /^I([a-z\-]+)\s+([0-9]+)\s+(.*)/i ) {
             my $hkey = $1;
             $rh->{$hkey}{pos} = $2;
+            $rh->{$hkey}{pos} //= 0;
             $rh->{$hkey}{val} = $3;
             my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
-            push @endlines, $hln;
+            splice @endlines, percent_decode($rh->{$hkey}{pos}), 0, $hln;
         }
         if ( $lfr =~ /^N([a-z\-]+)\s+([0-9]+)\s+(.*)/i ) {
             my $hkey = $1;
             $rh->{$hkey}{pos} = $2;
+            $rh->{$hkey}{pos} //= 0;
             $rh->{$hkey}{val} = $3;
             my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
             splice @endlines, percent_decode($rh->{$hkey}{pos}), 0, $hln;

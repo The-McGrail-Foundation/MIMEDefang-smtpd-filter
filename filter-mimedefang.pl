@@ -353,6 +353,22 @@ sub data_save {
             my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
             splice @endlines, percent_decode($rh->{$hkey}{pos}), 0, $hln;
         }
+        if ( $lfr =~ /^J([a-z\-]+)\s+([0-9]+)/i ) {
+            my $hkey = $1;
+            $rh->{$hkey}{pos} = $2;
+            $rh->{$hkey}{pos} //= 0;
+            my $count = 1;
+            my $idx = 0;
+            foreach my $ln ( @endlines ) {
+              if($ln eq $hkey) {
+                if($rh->{$hkey}{pos} eq $count) {
+                  delete @endlines[$idx];
+                }
+                $count++;
+              }
+              $idx++;
+            }
+        }
         if ( $lfr =~ /^(?:B|T)(.*)/ ) {
             $ret = $1;
             if(defined $ret) {

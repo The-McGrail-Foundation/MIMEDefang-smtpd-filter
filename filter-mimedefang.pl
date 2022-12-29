@@ -362,7 +362,7 @@ sub data_save {
             foreach my $ln ( @endlines ) {
               if($ln eq $hkey) {
                 if($rh->{$hkey}{pos} eq $count) {
-                  delete @endlines[$idx];
+                  delete $endlines[$idx];
                 }
                 $count++;
               }
@@ -387,6 +387,15 @@ sub data_save {
         }
         if ( $lfr =~ /^Q/ ) {
           # XXX quarantine command is not supported by smtpd-filters(7)
+        }
+        if ( $lfr =~ /^R(.*)/ ) {
+          # XXX Add a new recipient to the message
+        }
+        if ( $lfr =~ /^S(.*)/ ) {
+          # XXX Delete recip from the list of message recipients
+        }
+        if ( $lfr =~ /^f(.*)/ ) {
+          # XXX Change the envelope sender to sender
         }
     }
     close $fr;

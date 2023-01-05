@@ -15,6 +15,6 @@ The program has some parameters to modify its behavior.
 
 -X Do not add an X-Scanned-By: header.
 
-Some features that are available in MIMEDefang are not implemented.
+Some features that are available in MIMEDefang are not implemented.  
 In particular action_discard(), action_quarantine_entire_message(), add_recipient(),
 delete_recipient() and change_sender() are not available.

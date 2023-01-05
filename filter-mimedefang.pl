@@ -75,6 +75,8 @@ my $debug      = 0;
 my $helocheck  = 0;
 my $xscannedby = 1;
 
+our $SyslogFacility = "mail";
+
 if ( defined $opts{d} ) {
     $debug = 1;
 }
@@ -95,7 +97,7 @@ if (HAS_UNVEIL) {
 
 if (HAS_PLEDGE) {
     OpenBSD::Pledge->import;
-    pledge(qw( rpath wpath cpath unix )) || croak "Unable to pledge: $!";
+    pledge(qw( rpath wpath cpath prot_exec unix )) || croak "Unable to pledge: $!";
 }
 
 my $filter = OpenSMTPd::Filter->new(
@@ -148,6 +150,7 @@ sub helo_check {
         }
     }
 
+    md_syslog("Warning", "checking helo $identity");
     if ( $client and $client->connected() ) {
         $sockret =
           $client->send( 'helook '
@@ -302,6 +305,7 @@ sub data_save {
     return if not defined $client;
 
     my $buffer;
+    md_syslog("Warning", "checking message $message->{'envelope-id'}");
     if ( $client and $client->connected() ) {
         $sockret =
           $client->send( "scan $message->{'envelope-id'} "
@@ -343,7 +347,7 @@ sub data_save {
             $rh->{$hkey}{pos} //= 0;
             $rh->{$hkey}{val} = $3;
             my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
-            splice @endlines, percent_decode($rh->{$hkey}{pos}), 0, $hln;
+            splice @endlines, percent_decode($rh->{$hkey}{pos} - 1), 0, $hln;
         }
         if ( $lfr =~ /^N([a-z\-]+)\s+([0-9]+)\s+(.*)/i ) {
             my $hkey = $1;
@@ -380,6 +384,7 @@ sub data_save {
         }
         if ( $lfr =~ /^D/ ) {
           # XXX discard command is not supported by smtpd-filters(7)
+          md_syslog("Warning", "Discard command unsupported, email processing will continue");
         }
         if ( $lfr =~ /^M(.*)/ ) {
            $newctype = $1;
@@ -387,6 +392,7 @@ sub data_save {
         }
         if ( $lfr =~ /^Q/ ) {
           # XXX quarantine command is not supported by smtpd-filters(7)
+          md_syslog("Warning", "Quarantine command unsupported, email processing will continue");
         }
         if ( $lfr =~ /^R(.*)/ ) {
           # XXX Add a new recipient to the message

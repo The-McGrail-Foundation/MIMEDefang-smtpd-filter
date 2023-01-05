@@ -55,7 +55,7 @@ use Carp;
 use File::Path;
 use Getopt::Std;
 use IO::Socket::UNIX;
-use Mail::MIMEDefang 3.3;
+use Mail::MIMEDefang;
 use Mail::MIMEDefang::Utils;
 use OpenSMTPd::Filter;
 
@@ -198,12 +198,16 @@ sub _read_headers {
     my $subject;
     my @headers = ();
 
-    my $mx_id = Mail::MIMEDefang::Utils::gen_mx_id();
-    $message->{'md_mx_id'} = $mx_id;
-    if(not defined $message->{'envelope-id'}) {
-      $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'md_mx_id'};
+    if(Mail::MIMEDefang::Utils->can('gen_mx_id')) {
+      $message->{'md_mx_id'} = Mail::MIMEDefang::Utils::gen_mx_id();
     }
-    $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'};
+    if(defined $message->{'envelope-id'}) {
+      $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'envelope-id'};
+    } elsif (defined $message->{'md_mx_id'}) {
+      $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'md_mx_id'};
+    } else {
+      return reject => '550 System error, invalid Message-ID.'
+    }
     mkdir( $message->{md_spool_dir} ) or return;
     open( my $fh, '>',
         $message->{md_spool_dir} . '/HEADERS' )

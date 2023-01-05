@@ -355,7 +355,7 @@ sub data_save {
             $rh->{$hkey}{pos} //= 0;
             $rh->{$hkey}{val} = $3;
             my $hln = percent_decode($hkey) . ': ' . percent_decode( $rh->{$hkey}{val} );
-            splice @endlines, percent_decode($rh->{$hkey}{pos}), 0, $hln;
+            splice @endlines, percent_decode($rh->{$hkey}{pos} - 1), 0, $hln;
         }
         if ( $lfr =~ /^J([a-z\-]+)\s+([0-9]+)/i ) {
             my $hkey = $1;

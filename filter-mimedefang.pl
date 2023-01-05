@@ -236,6 +236,26 @@ sub _get_realip {
     return $realip;
 }
 
+sub _delete_header {
+    my $hkey = shift;
+    my $pos = shift;
+    my $lines = shift;
+    my @endlines = @{ $lines };
+
+    my $count = 1;
+    my $idx = 0;
+    foreach my $ln ( @endlines ) {
+      if($ln eq $hkey) {
+        if($pos eq $count) {
+          delete $endlines[$idx];
+        }
+        $count++;
+      }
+      $idx++;
+    }
+    return @endlines;
+}
+
 sub data_save {
     my ( $phase, $s, $lines ) = @_;
     my @lines = @{$lines};
@@ -361,17 +381,7 @@ sub data_save {
             my $hkey = $1;
             $rh->{$hkey}{pos} = $2;
             $rh->{$hkey}{pos} //= 0;
-            my $count = 1;
-            my $idx = 0;
-            foreach my $ln ( @endlines ) {
-              if($ln eq $hkey) {
-                if($rh->{$hkey}{pos} eq $count) {
-                  delete $endlines[$idx];
-                }
-                $count++;
-              }
-              $idx++;
-            }
+            @endlines = _delete_header($hkey, $rh->{$hkey}{pos}, \@endlines);
         }
         if ( $lfr =~ /^(?:B|T)(.*)/ ) {
             $ret = $1;

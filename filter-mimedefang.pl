@@ -406,12 +406,15 @@ sub data_save {
         }
         if ( $lfr =~ /^R(.*)/ ) {
           # XXX Add a new recipient to the message
+          md_syslog("Warning", "Adding a new recipient is not supported, email processing will continue");
         }
         if ( $lfr =~ /^S(.*)/ ) {
           # XXX Delete recip from the list of message recipients
+          md_syslog("Warning", "Deleting a new recipient is not supported, email processing will continue");
         }
         if ( $lfr =~ /^f(.*)/ ) {
           # XXX Change the envelope sender to sender
+          md_syslog("Warning", "Changing the envelope sender is not supported, email processing will continue");
         }
     }
     close $fr;

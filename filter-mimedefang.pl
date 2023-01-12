@@ -57,6 +57,8 @@ delete_recipient() and change_sender() are not available.
 
 =cut
 
+use v5.16;	# needed by OpenSMTPd::Filter
+
 use Carp;
 use File::Path;
 use Getopt::Std;

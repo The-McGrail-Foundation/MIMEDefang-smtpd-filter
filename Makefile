@@ -19,7 +19,7 @@ dist:
 	${INSTALL} -d filter-mimedefang-${VER}
 	${INSTALL} -m 0555 ${SCRIPT} filter-mimedefang-${VER}
 	${INSTALL} -m 0644 ${MAN8} filter-mimedefang-${VER}
-	${INSTALL} -m 0644 Makefile .
+	${INSTALL} -m 0644 Makefile filter-mimedefang-${VER}
 	tar zpcvf filter-mimedefang-${VER}.tar.gz filter-mimedefang-${VER}
 	rm -rf filter-mimedefang-${VER}
 

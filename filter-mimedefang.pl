@@ -511,6 +511,7 @@ sub data_check {
           message_cleanup($message);
           return reject => $ret if defined $ret;
 	}
+        message_cleanup($message);
         return 'proceed';
     }
     elsif ( $buffer =~ /temp_error/ ) {

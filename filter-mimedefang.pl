@@ -214,6 +214,7 @@ sub _read_headers {
     } elsif (defined $message->{'md_mx_id'}) {
       $message->{md_spool_dir} = $MDSPOOL_PATH . 'mdefang-' . $message->{'md_mx_id'};
     } else {
+      message_cleanup($message);
       return reject => '550 System error, invalid Message-ID.'
     }
     mkdir( $message->{md_spool_dir} ) or return;
@@ -499,17 +500,24 @@ sub data_check {
     my $message = $state->{message};
     my $buffer  = $message->{md_status};
 
-    return reject => '451 Temporary failure, please try again later.'
-      if not defined $buffer;
+    if(not defined $buffer) {
+      message_cleanup($message);
+      return reject => '451 Temporary failure, please try again later.'
+    }
     my $ret;
     if ( $buffer =~ /ok/ ) {
         $ret = $message->{md_ret};
-        return reject => $ret if defined $ret;
+        if(defined $ret) {
+          message_cleanup($message);
+          return reject => $ret if defined $ret;
+	}
         return 'proceed';
     }
     elsif ( $buffer =~ /temp_error/ ) {
+        message_cleanup($message);
         return reject => '451 Temporary failure, please try again later.';
     }
+    message_cleanup($message);
     return disconnect => '550 System error.' if $buffer =~ /error/;
 }
 
@@ -518,6 +526,14 @@ sub cleanup {
 
     my $state   = $s->{state};
     my $message = $state->{message};
+
+    if(not $debug) {
+      rmtree( $message->{md_spool_dir} ) if defined $message->{md_spool_dir};
+    }
+}
+
+sub message_cleanup {
+    my $message = shift;
 
     if(not $debug) {
       rmtree( $message->{md_spool_dir} ) if defined $message->{md_spool_dir};

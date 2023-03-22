@@ -134,17 +134,11 @@ my $filter = OpenSMTPd::Filter->new(
 
 $filter->ready;
 
-sub relay_check {
-    my ( $phase, $s ) = @_;
+sub _connect {
+    my $state = shift;
 
-    return 'proceed' if $relaycheck ne 1;
-
-    my $buffer;
-    my $errno;
-    my $ret;
-    my ( $socket, $sockret );
-    my $src  = $s->{state}->{src};
-    my $dest = $s->{state}->{dest};
+    my $src  = $state->{src};
+    my $dest = $state->{dest};
 
     my @src_addr  = split /\:/, $src;
     my $src_port  = pop @src_addr;
@@ -155,119 +149,12 @@ sub relay_check {
         Type => SOCK_STREAM(),
         Peer => $SOCK_PATH,
     );
-    return reject => '451 Temporary failure, please try again later.'
-      if not defined $client;
 
-    md_syslog("Warning", "checking relay from ip $src_addr[0]");
-    if ( $client and $client->connected() ) {
-        $sockret =
-          $client->send( 'relayok '
-              . join( ':', @src_addr ) . ' '
-              . $s->{state}->{rdns} . ' '
-              . $src_port . ''
-              . join( ':', @dest_addr ) . ' '
-              . $dest_port
-              . "\n" );
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
-        $sockret = $client->shutdown(SHUT_WR);
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
-
-        $sockret = $client->recv( $buffer, 1024 );
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
-        $sockret = $client->shutdown(SHUT_RD);
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
+    if(not defined $client) {
+      return;
+    } else {
+      return ($client, $src_addr[0], $src_port, $dest_addr[0], $dest_port);
     }
-    else {
-        return reject => '451 Temporary failure, please try again later.';
-    }
-
-    if ( $buffer =~ /ok\s+([0-9-]+)\s+(.*)/ ) {
-        $errno = $1;
-        $ret   = $2;
-
-        if ($errno eq -1) {
-            return reject => '451 Temporary failure, please try again later.'
-        }
-        return reject => '550 relay not allowed.' if($errno eq 0);
-        return 'proceed' if $errno eq 1;
-    }
-    return 'proceed';
-}
-
-sub helo_check {
-    my ( $phase, $s ) = @_;
-
-    return 'proceed' if $helocheck ne 1;
-
-    my $buffer;
-    my $identity;
-    my $errno;
-    my $ret;
-    my ( $socket, $sockret );
-    my $src  = $s->{state}->{src};
-    my $dest = $s->{state}->{dest};
-
-    my @src_addr  = split /\:/, $src;
-    my $src_port  = pop @src_addr;
-    my @dest_addr = split /\:/, $dest;
-    my $dest_port = pop @dest_addr;
-
-    my $client = IO::Socket::UNIX->new(
-        Type => SOCK_STREAM(),
-        Peer => $SOCK_PATH,
-    );
-    return reject => '451 Temporary failure, please try again later.'
-      if not defined $client;
-
-    foreach my $ev ( @{ $s->{events} } ) {
-        if ( defined( $ev->{phase} ) and ( $ev->{phase} eq $phase ) ) {
-            $identity = $ev->{identity};
-        }
-    }
-
-    md_syslog("Warning", "checking helo $identity");
-    if ( $client and $client->connected() ) {
-        $sockret =
-          $client->send( 'helook '
-              . join( ':', @src_addr ) . ' '
-              . $s->{state}->{hostname} . ' '
-              . $identity . ' '
-              . $src_port . ''
-              . join( ':', @dest_addr ) . ' '
-              . $dest_port
-              . "\n" );
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
-        $sockret = $client->shutdown(SHUT_WR);
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
-
-        $sockret = $client->recv( $buffer, 1024 );
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
-        $sockret = $client->shutdown(SHUT_RD);
-        return reject => '451 Temporary failure, please try again later.'
-          if not defined $sockret;
-    }
-    else {
-        return reject => '451 Temporary failure, please try again later.';
-    }
-
-    if ( $buffer =~ /ok\s+([0-9-]+)\s+(.*)/ ) {
-        $errno = $1;
-        $ret   = $2;
-
-        if ($errno eq -1) {
-            return reject => '451 Temporary failure, please try again later.'
-        }
-        return reject => '550 EHLO failure, go away.' if($errno eq 0);
-        return 'proceed' if $errno eq 1;
-    }
-    return 'proceed';
 }
 
 sub _read_headers {
@@ -340,6 +227,124 @@ sub _delete_header {
     return @endlines;
 }
 
+sub relay_check {
+    my ( $phase, $s ) = @_;
+
+    return 'proceed' if $relaycheck ne 1;
+
+    my $buffer;
+    my $errno;
+    my $ret;
+    my ( $socket, $sockret );
+
+    my ($client, $src_addr, $src_port, $dest_addr, $dest_port) = _connect($s->{state});
+
+    return reject => '451 Temporary failure, please try again later.'
+      if not defined $client;
+
+    md_syslog("Warning", "checking relay from ip $src_addr");
+    if ( $client and $client->connected() ) {
+        $sockret =
+          $client->send( 'relayok '
+              . $src_addr . ':' . $src_port . ' '
+              . $s->{state}->{rdns} . ' '
+              . $src_port . ''
+              . $dest_addr . ':' . $dest_port . ' '
+              . $dest_port
+              . "\n" );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_WR);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+
+        $sockret = $client->recv( $buffer, 1024 );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_RD);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+    }
+    else {
+        return reject => '451 Temporary failure, please try again later.';
+    }
+
+    if ( $buffer =~ /ok\s+([0-9-]+)\s+(.*)/ ) {
+        $errno = $1;
+        $ret   = $2;
+
+        if ($errno eq -1) {
+            return reject => '451 Temporary failure, please try again later.'
+        }
+        return reject => '550 relay not allowed.' if($errno eq 0);
+        return 'proceed' if $errno eq 1;
+    }
+    return 'proceed';
+}
+
+sub helo_check {
+    my ( $phase, $s ) = @_;
+
+    return 'proceed' if $helocheck ne 1;
+
+    my $buffer;
+    my $identity;
+    my $errno;
+    my $ret;
+    my ( $socket, $sockret );
+
+    my ($client, $src_addr, $src_port, $dest_addr, $dest_port) = _connect($s->{state});
+
+    return reject => '451 Temporary failure, please try again later.'
+      if not defined $client;
+
+    foreach my $ev ( @{ $s->{events} } ) {
+        if ( defined( $ev->{phase} ) and ( $ev->{phase} eq $phase ) ) {
+            $identity = $ev->{identity};
+        }
+    }
+
+    md_syslog("Warning", "checking helo $identity");
+    if ( $client and $client->connected() ) {
+        $sockret =
+          $client->send( 'helook '
+              . $src_addr . ':' . $src_port . ' '
+              . $s->{state}->{hostname} . ' '
+              . $identity . ' '
+              . $src_port . ''
+              . $dest_addr . ':' . $dest_port . ' '
+              . $dest_port
+              . "\n" );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_WR);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+
+        $sockret = $client->recv( $buffer, 1024 );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_RD);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+    }
+    else {
+        return reject => '451 Temporary failure, please try again later.';
+    }
+
+    if ( $buffer =~ /ok\s+([0-9-]+)\s+(.*)/ ) {
+        $errno = $1;
+        $ret   = $2;
+
+        if ($errno eq -1) {
+            return reject => '451 Temporary failure, please try again later.'
+        }
+        return reject => '550 EHLO failure, go away.' if($errno eq 0);
+        return 'proceed' if $errno eq 1;
+    }
+    return 'proceed';
+}
+
 sub data_save {
     my ( $phase, $s, $lines ) = @_;
     my @lines = @{$lines};
@@ -402,10 +407,7 @@ sub data_save {
     print $fc "F\n";
     close $fc;
 
-    my $client = IO::Socket::UNIX->new(
-        Type => SOCK_STREAM(),
-        Peer => $SOCK_PATH,
-    );
+    my ($client, $src_addr, $src_port, $dest_addr, $dest_port) = _connect($s->{state});
     return if not defined $client;
 
     my $buffer;

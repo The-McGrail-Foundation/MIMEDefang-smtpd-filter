@@ -45,7 +45,9 @@ The program has some parameters to modify its behavior.
 -d	enable debug mode, when debug mode is enabled, logs will
 	be more verbose and temporary files under /var/spool/MIMEDefang will not be removed.
 
--H	run helo checks by calling helo_check sub in mimedefang-filter(5)
+-r	performs a relay check by calling filter_relay sub in mimedefang-filter(5)
+
+-H	performs a relay check by calling filter_helo sub in mimedefang-filter(5)
 
 -X	Do not add an X-Scanned-By: header.
 
@@ -77,9 +79,10 @@ use constant HAS_UNVEIL => eval { require OpenBSD::Unveil; };
 use constant HAS_PLEDGE => eval { require OpenBSD::Pledge; };
 
 my %opts;
-getopts( 'dHX', \%opts );
+getopts( 'dHrX', \%opts );
 
 my $debug      = 0;
+my $relaycheck  = 0;
 my $helocheck  = 0;
 my $xscannedby = 1;
 
@@ -90,6 +93,9 @@ if ( defined $opts{d} ) {
 }
 if ( defined $opts{H} ) {
     $helocheck = 1;
+}
+if ( defined $opts{r} ) {
+    $relaycheck = 1;
 }
 if ( defined $opts{X} ) {
     $xscannedby = 0;
@@ -116,6 +122,7 @@ my $filter = OpenSMTPd::Filter->new(
         } },
         filter => {
             'smtp-in' => {
+                'connect'    => \&relay_check,
                 'helo'       => \&helo_check,
                 'ehlo'       => \&helo_check,
                 'data-lines' => \&data_save,
@@ -126,6 +133,70 @@ my $filter = OpenSMTPd::Filter->new(
 );
 
 $filter->ready;
+
+sub relay_check {
+    my ( $phase, $s ) = @_;
+
+    return 'proceed' if $relaycheck ne 1;
+
+    my $buffer;
+    my $errno;
+    my $ret;
+    my ( $socket, $sockret );
+    my $src  = $s->{state}->{src};
+    my $dest = $s->{state}->{dest};
+
+    my @src_addr  = split /\:/, $src;
+    my $src_port  = pop @src_addr;
+    my @dest_addr = split /\:/, $dest;
+    my $dest_port = pop @dest_addr;
+
+    my $client = IO::Socket::UNIX->new(
+        Type => SOCK_STREAM(),
+        Peer => $SOCK_PATH,
+    );
+    return reject => '451 Temporary failure, please try again later.'
+      if not defined $client;
+
+    md_syslog("Warning", "checking relay from ip $src_addr[0]");
+    if ( $client and $client->connected() ) {
+        $sockret =
+          $client->send( 'relayok '
+              . join( ':', @src_addr ) . ' '
+              . $s->{state}->{rdns} . ' '
+              . $src_port . ''
+              . join( ':', @dest_addr ) . ' '
+              . $dest_port
+              . "\n" );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_WR);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+
+        $sockret = $client->recv( $buffer, 1024 );
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+        $sockret = $client->shutdown(SHUT_RD);
+        return reject => '451 Temporary failure, please try again later.'
+          if not defined $sockret;
+    }
+    else {
+        return reject => '451 Temporary failure, please try again later.';
+    }
+
+    if ( $buffer =~ /ok\s+([0-9-]+)\s+(.*)/ ) {
+        $errno = $1;
+        $ret   = $2;
+
+        if ($errno eq -1) {
+            return reject => '451 Temporary failure, please try again later.'
+        }
+        return reject => '550 relay not allowed.' if($errno eq 0);
+        return 'proceed' if $errno eq 1;
+    }
+    return 'proceed';
+}
 
 sub helo_check {
     my ( $phase, $s ) = @_;

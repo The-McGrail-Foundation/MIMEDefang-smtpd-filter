@@ -11,7 +11,9 @@ The program has some parameters to modify its behavior.
    verbose and temporary files under /var/spool/MIMEDefang will not be
    removed.
 
--H run helo checks by calling helo_check sub in mimedefang-filter(5)
+-r run relay check by calling filter_relay sub in mimedefang-filter(5)
+
+-H run helo check by calling helo_check sub in mimedefang-filter(5)
 
 -X Do not add an X-Scanned-By: header.
 
